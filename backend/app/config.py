@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
 
     # Embedding Settings
-    EMBEDDING_PROVIDER: str = "sentence-transformers"  # "sentence-transformers", "gemini", "mock"
-    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    EMBEDDING_PROVIDER: str = "gemini"  # "gemini", "sentence-transformers", "mock"
+    EMBEDDING_MODEL: str = "text-embedding-004"
 
     # Vector Store & Storage
     CHROMA_PERSIST_DIR: str = str(BASE_DIR / "data" / "chroma_db")

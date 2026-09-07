@@ -172,7 +172,14 @@ def get_embedding_provider(provider_name: str = None) -> BaseEmbeddingProvider:
     if provider == "sentence-transformers":
         instance = SentenceTransformerEmbeddingProvider(model_name=settings.EMBEDDING_MODEL)
     elif provider == "gemini":
-        instance = GeminiEmbeddingProvider()
+        if not settings.GEMINI_API_KEY:
+            import logging
+            logging.getLogger(__name__).warning(
+                "GEMINI_API_KEY is not set for Gemini embeddings. Using MockEmbeddingProvider for low-memory mode."
+            )
+            instance = MockEmbeddingProvider()
+        else:
+            instance = GeminiEmbeddingProvider()
     elif provider == "mock":
         instance = MockEmbeddingProvider()
     elif provider == "openai":
