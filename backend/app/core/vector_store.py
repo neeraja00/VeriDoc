@@ -116,9 +116,9 @@ class VectorStoreManager:
         distances = results["distances"][0]
 
         for chunk_id, meta, doc_text, dist in zip(ids, metadatas, documents, distances):
-            # Chroma with cosine metric returns cosine distance (0 = identical, 2 = opposite).
-            # Convert to similarity score between 0.0 and 1.0
-            similarity = max(0.0, min(1.0, 1.0 - float(dist)))
+            # Chroma with cosine metric returns cosine distance in [0, 2].
+            # Convert cosine distance into normalized cosine similarity between 0.0 and 1.0
+            similarity = max(0.0, min(1.0, (2.0 - float(dist)) / 2.0))
             record = {
                 "chunk_id": chunk_id,
                 "content": doc_text,
@@ -132,11 +132,51 @@ class VectorStoreManager:
 
     def delete_document(self, filename: str) -> int:
         """Deletes all indexed chunks originating from a specific filename."""
+        import urllib.parse
         try:
+            decoded = urllib.parse.unquote(filename)
+            targets = {filename, decoded}
+
+            # 1. Query by filename
+            ids_to_delete = []
             records = self.collection.get(where={"filename": filename})
-            if records and records["ids"]:
-                self.collection.delete(ids=records["ids"])
-                deleted_count = len(records["ids"])
+            if records and records.get("ids"):
+                ids_to_delete.extend(records["ids"])
+
+            # 2. If needed, query by source
+            if not ids_to_delete:
+                records = self.collection.get(where={"source": filename})
+                if records and records.get("ids"):
+                    ids_to_delete.extend(records["ids"])
+
+            # 3. Check decoded filename if different
+            if not ids_to_delete and decoded != filename:
+                records = self.collection.get(where={"filename": decoded})
+                if records and records.get("ids"):
+                    ids_to_delete.extend(records["ids"])
+                if not ids_to_delete:
+                    records = self.collection.get(where={"source": decoded})
+                    if records and records.get("ids"):
+                        ids_to_delete.extend(records["ids"])
+
+            # 4. Fallback scan all records if exact where clause found nothing
+            if not ids_to_delete:
+                all_records = self.collection.get(include=["metadatas"])
+                if all_records and all_records.get("ids") and all_records.get("metadatas"):
+                    matched = []
+                    for cid, meta in zip(all_records["ids"], all_records["metadatas"]):
+                        mf = meta.get("filename", "")
+                        ms = meta.get("source", "")
+                        if mf in targets or ms in targets or Path(mf).name in targets or Path(ms).name in targets:
+                            matched.append(cid)
+                    ids_to_delete = matched
+
+            # Deduplicate IDs
+            ids_to_delete = list(set(ids_to_delete))
+
+            if ids_to_delete:
+                self.collection.delete(ids=ids_to_delete)
+                deleted_count = len(ids_to_delete)
                 logger.info(f"Deleted {deleted_count} chunks for filename '{filename}'.")
                 return deleted_count
         except Exception as e:

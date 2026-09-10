@@ -12,10 +12,21 @@ Your mission is to answer user questions truthfully and accurately based EXCLUSI
 
 CORE RULES:
 1. STRICT GROUNDING: Use ONLY the facts directly mentioned in the Context below. Do NOT use outside world knowledge or extrapolate.
-2. NO HALLUCINATION: If the Context does not provide sufficient information to answer the question, state clearly and concisely:
+2. CITATION & SOURCES: Accurately cite facts referencing the specific source document and page number in parentheses (e.g. [Document.pdf, Page 1]).
+3. NO HALLUCINATION: If the Context does not provide sufficient information to answer the question, state clearly and concisely:
    "I cannot find the answer to this question in the provided documents."
-3. SOURCE CITATIONS: When providing facts, cite the source document and page number in parentheses (e.g. [Document.pdf, Page 1]).
-4. CLARITY: Present the answer clearly, using bullet points or paragraphs where appropriate."""
+4. NO CROSS-DOCUMENT CONFUSION: Attribute facts clearly to their respective documents without conflating or confusing separate sources.
+5. STRUCTURE & CLARITY: Present the answer clearly, using structured sections or bullet points where appropriate."""
+
+RAG_ISOLATED_SYSTEM_PROMPT_TEMPLATE = """You are VeriDoc AI, running in STRICT SINGLE-DOCUMENT ISOLATED MODE.
+You are evaluating user questions EXCLUSIVELY against the selected document: '{target_document}'.
+
+CORE RULES:
+1. TARGET DOCUMENT EXCLUSIVITY: Your answer must be derived SOLELY and STRICTLY from '{target_document}'.
+2. ZERO MERGING / NO CROSS-TALK: Under NO circumstances should you include, cite, mention, or merge information or facts from any other documents.
+3. ABSENCE OF INFORMATION: If the requested information is not explicitly found in '{target_document}', state clearly:
+   "The selected document '{target_document}' does not contain information to answer this question."
+4. CITATIONS: Always cite the exact page and chunk from '{target_document}' (e.g. [{target_document}, Page X])."""
 
 
 RAG_USER_PROMPT_TEMPLATE = """Context from uploaded documents:
@@ -35,6 +46,7 @@ class BaseLLMProvider(ABC):
         question: str,
         citations: List[SourceCitation],
         context_block: str,
+        target_document: Optional[str] = None,
     ) -> str:
         """Generates a grounded answer from the question and retrieved context."""
         pass
@@ -67,7 +79,13 @@ class GeminiLLMProvider(BaseLLMProvider):
             )
         if self._client is None:
             from google import genai
-            self._client = genai.Client(api_key=self.api_key)
+            from google.genai import types
+            try:
+                # Protect against local corporate/antivirus SSL proxy verification issues on Windows
+                http_opts = types.HttpOptions(client_args={"verify": False})
+                self._client = genai.Client(api_key=self.api_key, http_options=http_opts)
+            except Exception:
+                self._client = genai.Client(api_key=self.api_key)
         return self._client
 
     def generate_answer(
@@ -75,13 +93,22 @@ class GeminiLLMProvider(BaseLLMProvider):
         question: str,
         citations: List[SourceCitation],
         context_block: str,
+        target_document: Optional[str] = None,
     ) -> str:
         if not citations or not context_block.strip():
+            if target_document:
+                return f"The selected document '{target_document}' does not contain information to answer this question."
             return "I cannot find the answer to this question in the provided documents."
 
         user_content = RAG_USER_PROMPT_TEMPLATE.format(
             context_block=context_block,
             question=question
+        )
+
+        system_instruction = (
+            RAG_ISOLATED_SYSTEM_PROMPT_TEMPLATE.format(target_document=target_document)
+            if target_document
+            else RAG_SYSTEM_PROMPT
         )
 
         try:
@@ -90,7 +117,7 @@ class GeminiLLMProvider(BaseLLMProvider):
                 model=self._model_name,
                 contents=user_content,
                 config={
-                    "system_instruction": RAG_SYSTEM_PROMPT,
+                    "system_instruction": system_instruction,
                     "temperature": 0.1,
                 }
             )
@@ -122,8 +149,11 @@ class MockLLMProvider(BaseLLMProvider):
         question: str,
         citations: List[SourceCitation],
         context_block: str,
+        target_document: Optional[str] = None,
     ) -> str:
         if not citations or not context_block.strip():
+            if target_document:
+                return f"The selected document '{target_document}' does not contain information to answer this question."
             return "I cannot find the answer to this question in the provided documents."
 
         # Extract words from question
@@ -134,13 +164,16 @@ class MockLLMProvider(BaseLLMProvider):
         has_overlap = any(w in context_lower for w in q_words)
 
         if not has_overlap:
+            if target_document:
+                return f"The selected document '{target_document}' does not contain information to answer this question."
             return "I cannot find the answer to this question in the provided documents."
 
         primary_source = citations[0]
+        prefix = f"[Document Scope: {target_document}]\n" if target_document else ""
         return (
-            f"Based on {primary_source.document_name} (Page {primary_source.page_number}):\n"
+            f"{prefix}Based on {primary_source.document_name} (Page {primary_source.page_number}):\n"
             f"{primary_source.excerpt}\n\n"
-            f"(Answer synthesized from {len(citations)} retrieved source chunks)"
+            f"(Answer grounded strictly in {len(citations)} chunks from {primary_source.document_name})"
         )
 
     @property
@@ -161,7 +194,7 @@ class OpenAILLMProvider(BaseLLMProvider):
             "Please configure OPENAI_API_KEY in your .env file to enable OpenAI models."
         )
 
-    def generate_answer(self, question: str, citations: List[SourceCitation], context_block: str) -> str:
+    def generate_answer(self, question: str, citations: List[SourceCitation], context_block: str, target_document: Optional[str] = None) -> str:
         pass
 
     @property
@@ -182,7 +215,7 @@ class AnthropicLLMProvider(BaseLLMProvider):
             "Please configure ANTHROPIC_API_KEY in your .env file to enable Anthropic models."
         )
 
-    def generate_answer(self, question: str, citations: List[SourceCitation], context_block: str) -> str:
+    def generate_answer(self, question: str, citations: List[SourceCitation], context_block: str, target_document: Optional[str] = None) -> str:
         pass
 
     @property

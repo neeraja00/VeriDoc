@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
+from fastapi.responses import FileResponse
 from backend.app.config import settings
 from backend.app.core.document_loader import (
     DocumentLoader,
@@ -165,31 +166,39 @@ def get_document_chunks(filename: str):
     return chunk_list
 
 
-@router.delete("/{filename}", response_model=DocumentDeleteResponse)
+@router.delete("/{filename:path}", response_model=DocumentDeleteResponse)
 def delete_document(filename: str):
     """Deletes an indexed document from the vector store and removes its uploaded file."""
+    import urllib.parse
+    decoded_filename = urllib.parse.unquote(filename)
+
     vector_store = get_vector_store()
     deleted_chunks = vector_store.delete_document(filename)
+    if deleted_chunks == 0 and decoded_filename != filename:
+        deleted_chunks = vector_store.delete_document(decoded_filename)
 
-    if deleted_chunks == 0:
+    # Remove uploaded file if present on disk
+    file_removed = False
+    for fn in {filename, decoded_filename}:
+        file_path = Path(settings.UPLOAD_DIR) / fn
+        if file_path.exists():
+            try:
+                file_path.unlink()
+                file_removed = True
+            except Exception as e:
+                logger.warning(f"Failed to delete disk file {file_path}: {e}")
+
+    if deleted_chunks == 0 and not file_removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Document '{filename}' not found in vector store."
+            detail=f"Document '{decoded_filename}' not found in vector store or storage."
         )
-
-    # Remove uploaded file if present
-    file_path = Path(settings.UPLOAD_DIR) / filename
-    if file_path.exists():
-        try:
-            file_path.unlink()
-        except Exception:
-            pass
 
     return DocumentDeleteResponse(
         success=True,
-        filename=filename,
+        filename=decoded_filename,
         deleted_chunks=deleted_chunks,
-        message=f"Successfully deleted {deleted_chunks} chunks for '{filename}'."
+        message=f"Successfully deleted {deleted_chunks} chunks for '{decoded_filename}'."
     )
 
 
@@ -208,3 +217,39 @@ def clear_all_documents():
                 pass
 
     return {"success": True, "message": "All documents and vector store records have been cleared."}
+
+
+@router.get("/{filename}/file")
+def get_document_file(filename: str):
+    """
+    Serves the raw document file for in-browser page viewing as verified proof.
+    Supports PDF (#page=N), TXT, MD, DOCX.
+    """
+    file_path = Path(settings.UPLOAD_DIR) / filename
+    if not file_path.exists():
+        # Fallback to sample_documents directory
+        sample_path = Path(settings.BASE_DIR) / "sample_documents" / filename
+        if sample_path.exists():
+            file_path = sample_path
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Document file '{filename}' not found."
+            )
+
+    ext = file_path.suffix.lower()
+    media_types = {
+        ".pdf": "application/pdf",
+        ".txt": "text/plain; charset=utf-8",
+        ".md": "text/plain; charset=utf-8",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        filename=filename,
+        content_disposition_type="inline"
+    )
+

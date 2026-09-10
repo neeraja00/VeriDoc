@@ -51,6 +51,11 @@ def query_rag(request: RAGQueryRequest):
     # Format context block
     context_block = retriever.format_context_block(citations)
 
+    # Determine single-document target scope if filtered
+    target_doc = None
+    if request.document_filter and len(request.document_filter) == 1:
+        target_doc = request.document_filter[0]
+
     # Initialize LLM provider
     try:
         llm = get_llm_provider()
@@ -58,6 +63,7 @@ def query_rag(request: RAGQueryRequest):
             question=request.query,
             citations=citations,
             context_block=context_block,
+            target_document=target_doc,
         )
     except Exception as e:
         raise HTTPException(
@@ -69,6 +75,7 @@ def query_rag(request: RAGQueryRequest):
     is_grounded = bool(citations) and (
         "cannot find the answer" not in answer.lower()
         and "not mentioned in the provided" not in answer.lower()
+        and "does not contain information" not in answer.lower()
     )
 
     elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
