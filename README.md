@@ -338,7 +338,9 @@ VeriDoc AI exposes clean, fully typed REST endpoints with automatic OpenAPI vali
 ## 👨💻 Author
 
 **Neeraja**
+**Srujana Addanki**
 - **GitHub**: [@neeraja00](https://github.com/neeraja00)
+- **GitHub**: [@Srujanaaddanki](https://github.com/Srujanaaddanki)
 - **Repository**: [VeriDoc](https://github.com/neeraja00/VeriDoc)
 
 ---
