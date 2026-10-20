@@ -67,9 +67,15 @@ class BaseLLMProvider(ABC):
 class GeminiLLMProvider(BaseLLMProvider):
     """Google Gemini LLM provider using the google-genai SDK."""
 
-    def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model_name: Optional[str] = None,
+        verify_ssl: Optional[bool] = None,
+    ):
         self.api_key = api_key or settings.GEMINI_API_KEY
         self._model_name = model_name or settings.GEMINI_MODEL
+        self._verify_ssl = settings.VERIFY_SSL if verify_ssl is None else verify_ssl
         self._client = None
 
     def _get_client(self):
@@ -81,11 +87,14 @@ class GeminiLLMProvider(BaseLLMProvider):
             from google import genai
             from google.genai import types
             try:
-                # Protect against local corporate/antivirus SSL proxy verification issues on Windows
-                http_opts = types.HttpOptions(client_args={"verify": False})
+                # SSL verification enabled by default. Can be disabled via VERIFY_SSL=false for local proxy setups.
+                http_opts = types.HttpOptions(client_args={"verify": self._verify_ssl})
                 self._client = genai.Client(api_key=self.api_key, http_options=http_opts)
-            except Exception:
-                self._client = genai.Client(api_key=self.api_key)
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini client (verify_ssl={self._verify_ssl}): {e}")
+                raise RuntimeError(
+                    f"Failed to initialize Gemini client with VERIFY_SSL={self._verify_ssl}: {e}"
+                ) from e
         return self._client
 
     def generate_answer(

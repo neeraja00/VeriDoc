@@ -173,6 +173,7 @@ All critical blocking defects have been identified, remediated, and verified wit
 - [x] **VDOC-04**: Fixed unhandled `NameError: name 'logger' is not defined` crash in `routes_documents.py`.
 - [x] **VDOC-05**: Updated Gemini cloud embeddings model from obsolete `text-embedding-004` to `gemini-embedding-001` (dimension 3072).
 - [x] **VDOC-06**: Optimized Render build command and `Dockerfile` to install CPU-only PyTorch, cutting container image size by over 60%.
+- [x] **VDOC-07**: Enabled secure SSL certificate verification by default (`VERIFY_SSL=true`) for Gemini API and embeddings, with configurable override for custom proxy environments.
 
 #### 2. VERIFIED
 - [x] **Document Ingestion**: Verified extraction across `.pdf` (`sample_knowledge.pdf`), `.docx`, `.txt`, and `.md`.

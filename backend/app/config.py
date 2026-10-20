@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "gemini"  # "gemini", "openai", "anthropic", "mock"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.6-flash"
+    VERIFY_SSL: bool = True  # Enable SSL verification by default for secure API communication
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 

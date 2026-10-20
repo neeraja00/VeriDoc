@@ -89,6 +89,64 @@ def test_gemini_error_handling_mappings():
             provider.generate_answer("test question", [sample_citation], "context")
 
 
+def test_gemini_ssl_verification_setting(monkeypatch):
+    """Verifies that SSL certificate verification is enabled by default, configurable via VERIFY_SSL,
+    correctly parsed from environment variables, and fails loudly rather than silently bypassing settings.
+    """
+    from backend.app.config import Settings
+    from backend.app.core.embeddings import GeminiEmbeddingProvider
+
+    # 1. Default Settings check: VERIFY_SSL must be True
+    s_default = Settings()
+    assert s_default.VERIFY_SSL is True
+
+    # 2. Environment variable parsing check for "false" / "true"
+    monkeypatch.setenv("VERIFY_SSL", "false")
+    s_false = Settings()
+    assert s_false.VERIFY_SSL is False
+
+    monkeypatch.setenv("VERIFY_SSL", "true")
+    s_true = Settings()
+    assert s_true.VERIFY_SSL is True
+
+    # 3. Provider instance default and overrides
+    p_default = GeminiLLMProvider(api_key="mock_key")
+    assert p_default._verify_ssl is True
+
+    p_custom = GeminiLLMProvider(api_key="mock_key", verify_ssl=False)
+    assert p_custom._verify_ssl is False
+
+    # 4. Verify client creation passes the verify option to HttpOptions
+    with patch("google.genai.Client") as mock_genai_client:
+        mock_instance = MagicMock()
+        mock_genai_client.return_value = mock_instance
+
+        # Test verify=True
+        p_true = GeminiLLMProvider(api_key="mock_key", verify_ssl=True)
+        client = p_true._get_client()
+        assert client is mock_instance
+        call_kwargs = mock_genai_client.call_args.kwargs
+        assert call_kwargs["api_key"] == "mock_key"
+        assert "http_options" in call_kwargs
+        assert getattr(call_kwargs["http_options"], "client_args", {}).get("verify") is True
+
+        # Test verify=False
+        p_false = GeminiLLMProvider(api_key="mock_key", verify_ssl=False)
+        p_false._get_client()
+        call_kwargs_false = mock_genai_client.call_args.kwargs
+        assert getattr(call_kwargs_false["http_options"], "client_args", {}).get("verify") is False
+
+    # 5. Verify that client initialization failures raise RuntimeError and do not silently fall back
+    with patch("google.genai.Client", side_effect=Exception("Connection handshake error")):
+        p_fail = GeminiLLMProvider(api_key="mock_key", verify_ssl=True)
+        with pytest.raises(RuntimeError, match="Failed to initialize Gemini client with VERIFY_SSL=True"):
+            p_fail._get_client()
+
+        p_emb_fail = GeminiEmbeddingProvider(api_key="mock_key", verify_ssl=True)
+        with pytest.raises(RuntimeError, match="Failed to initialize Gemini embeddings client with VERIFY_SSL=True"):
+            p_emb_fail._get_client()
+
+
 def test_real_gemini_live_call():
     """Integration test that performs an actual generation call via Gemini if configured."""
     api_key = settings.GEMINI_API_KEY

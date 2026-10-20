@@ -66,18 +66,35 @@ class SentenceTransformerEmbeddingProvider(BaseEmbeddingProvider):
 class GeminiEmbeddingProvider(BaseEmbeddingProvider):
     """Google Gemini Embeddings provider (gemini-embedding-001)."""
 
-    def __init__(self, api_key: str = None, model_name: str = "gemini-embedding-001"):
+    def __init__(
+        self,
+        api_key: str = None,
+        model_name: str = "gemini-embedding-001",
+        verify_ssl: bool = None,
+    ):
         self.api_key = api_key or settings.GEMINI_API_KEY
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY is required for Gemini embeddings.")
         self.model_name = model_name
+        self._verify_ssl = settings.VERIFY_SSL if verify_ssl is None else verify_ssl
         self._client = None
         self._dimension = 3072
 
     def _get_client(self):
         if self._client is None:
+            import logging
             from google import genai
-            self._client = genai.Client(api_key=self.api_key)
+            from google.genai import types
+            try:
+                http_opts = types.HttpOptions(client_args={"verify": self._verify_ssl})
+                self._client = genai.Client(api_key=self.api_key, http_options=http_opts)
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    f"Failed to initialize Gemini embeddings client (verify_ssl={self._verify_ssl}): {e}"
+                )
+                raise RuntimeError(
+                    f"Failed to initialize Gemini embeddings client with VERIFY_SSL={self._verify_ssl}: {e}"
+                ) from e
         return self._client
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
