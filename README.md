@@ -71,7 +71,7 @@ VeriDoc/
 │       │   ├── embeddings.py        # Pluggable embeddings (SentenceTransformers, Gemini, Mock)
 │       │   ├── vector_store.py      # ChromaDB manager with HNSW cosine search & index maintenance
 │       │   ├── retriever.py         # Top-K relevance retrieval & context formatting
-│       │   └── llm.py               # Pluggable LLM orchestrator (Gemini 1.5 Flash, Mock)
+│       │   └── llm.py               # Pluggable LLM orchestrator (Gemini Flash, Mock)
 │       └── schemas/                 # Pydantic request & response validation schemas
 │           ├── __init__.py
 │           ├── document.py          # Document, chunk, and upload schemas
@@ -139,7 +139,7 @@ Open `.env` and configure your settings:
 # LLM Configuration
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-3.6-flash
 
 # Embedding Configuration
 EMBEDDING_PROVIDER=sentence-transformers
@@ -311,7 +311,7 @@ VeriDoc AI exposes clean, fully typed REST endpoints with automatic OpenAPI vali
   ],
   "total_sources_found": 1,
   "llm_provider": "gemini",
-  "model_name": "gemini-1.5-flash",
+  "model_name": "gemini-3.6-flash",
   "is_grounded": true,
   "processing_time_ms": 342.15
 }

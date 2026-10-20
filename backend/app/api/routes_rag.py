@@ -35,7 +35,7 @@ def query_rag(request: RAGQueryRequest):
             sources=[],
             total_sources_found=0,
             llm_provider=settings.LLM_PROVIDER,
-            model_name=settings.GEMINI_MODEL,
+            model_name=settings.GEMINI_MODEL if settings.LLM_PROVIDER == "gemini" and settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_") else "mock",
             is_grounded=False,
             processing_time_ms=round((time.perf_counter() - start_time) * 1000, 2),
         )

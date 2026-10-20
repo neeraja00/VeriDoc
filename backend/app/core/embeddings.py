@@ -64,15 +64,15 @@ class SentenceTransformerEmbeddingProvider(BaseEmbeddingProvider):
 
 
 class GeminiEmbeddingProvider(BaseEmbeddingProvider):
-    """Google Gemini Embeddings provider (text-embedding-004)."""
+    """Google Gemini Embeddings provider (gemini-embedding-001)."""
 
-    def __init__(self, api_key: str = None, model_name: str = "text-embedding-004"):
+    def __init__(self, api_key: str = None, model_name: str = "gemini-embedding-001"):
         self.api_key = api_key or settings.GEMINI_API_KEY
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY is required for Gemini embeddings.")
         self.model_name = model_name
         self._client = None
-        self._dimension = 768
+        self._dimension = 3072
 
     def _get_client(self):
         if self._client is None:
