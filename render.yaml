@@ -3,7 +3,7 @@ services:
     name: veridoc-ai
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir -r requirements.txt
     startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/system/health
     envVars:
@@ -14,11 +14,13 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-1.5-flash
+        value: gemini-3.6-flash
+      - key: VERIFY_SSL
+        value: "true"
       - key: EMBEDDING_PROVIDER
-        value: gemini
+        value: sentence-transformers
       - key: EMBEDDING_MODEL
-        value: text-embedding-004
+        value: all-MiniLM-L6-v2
       - key: CHROMA_PERSIST_DIR
         value: ./data/chroma_db
       - key: COLLECTION_NAME

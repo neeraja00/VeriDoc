@@ -116,9 +116,12 @@ class VectorStoreManager:
         distances = results["distances"][0]
 
         for chunk_id, meta, doc_text, dist in zip(ids, metadatas, documents, distances):
-            # Chroma with cosine metric returns cosine distance in [0, 2].
-            # Convert cosine distance into normalized cosine similarity between 0.0 and 1.0
-            similarity = max(0.0, min(1.0, (2.0 - float(dist)) / 2.0))
+            # Chroma with hnsw:space='cosine' returns cosine distance: d = 1 - cos(theta) in [0, 2].
+            # True cosine similarity is cos(theta) = 1.0 - d.
+            # Bounding to [0.0, 1.0] ensures similarity scores represent positive correlation,
+            # accurately evaluating against SIMILARITY_SCORE_THRESHOLD (e.g. 0.25).
+            cosine_dist = float(dist)
+            similarity = max(0.0, min(1.0, 1.0 - cosine_dist))
             record = {
                 "chunk_id": chunk_id,
                 "content": doc_text,

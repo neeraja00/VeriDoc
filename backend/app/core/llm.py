@@ -67,9 +67,15 @@ class BaseLLMProvider(ABC):
 class GeminiLLMProvider(BaseLLMProvider):
     """Google Gemini LLM provider using the google-genai SDK."""
 
-    def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model_name: Optional[str] = None,
+        verify_ssl: Optional[bool] = None,
+    ):
         self.api_key = api_key or settings.GEMINI_API_KEY
         self._model_name = model_name or settings.GEMINI_MODEL
+        self._verify_ssl = settings.VERIFY_SSL if verify_ssl is None else verify_ssl
         self._client = None
 
     def _get_client(self):
@@ -81,11 +87,14 @@ class GeminiLLMProvider(BaseLLMProvider):
             from google import genai
             from google.genai import types
             try:
-                # Protect against local corporate/antivirus SSL proxy verification issues on Windows
-                http_opts = types.HttpOptions(client_args={"verify": False})
+                # SSL verification enabled by default. Can be disabled via VERIFY_SSL=false for local proxy setups.
+                http_opts = types.HttpOptions(client_args={"verify": self._verify_ssl})
                 self._client = genai.Client(api_key=self.api_key, http_options=http_opts)
-            except Exception:
-                self._client = genai.Client(api_key=self.api_key)
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini client (verify_ssl={self._verify_ssl}): {e}")
+                raise RuntimeError(
+                    f"Failed to initialize Gemini client with VERIFY_SSL={self._verify_ssl}: {e}"
+                ) from e
         return self._client
 
     def generate_answer(
@@ -111,20 +120,80 @@ class GeminiLLMProvider(BaseLLMProvider):
             else RAG_SYSTEM_PROMPT
         )
 
-        try:
-            client = self._get_client()
-            response = client.models.generate_content(
-                model=self._model_name,
-                contents=user_content,
-                config={
-                    "system_instruction": system_instruction,
-                    "temperature": 0.1,
-                }
-            )
-            return response.text.strip()
-        except Exception as e:
-            logger.error(f"Gemini API generation error: {e}")
-            raise RuntimeError(f"Gemini API error: {str(e)}") from e
+        import time
+        from google.genai import errors
+
+        models_to_try = [self._model_name]
+        # If the requested model is gemini-3.8-flash, include gemini-3.6-flash as a resilience fallback on 503 spikes
+        if self._model_name != "gemini-3.6-flash":
+            models_to_try.append("gemini-3.6-flash")
+
+        last_error = None
+        for current_model in models_to_try:
+            for attempt in range(2):
+                try:
+                    client = self._get_client()
+                    response = client.models.generate_content(
+                        model=current_model,
+                        contents=user_content,
+                        config={
+                            "system_instruction": system_instruction,
+                            "temperature": 0.1,
+                        }
+                    )
+                    text = (response.text or "").strip()
+                    if text:
+                        return text
+                except errors.APIError as e:
+                    last_error = e
+                    status_code = getattr(e, "code", getattr(e, "status_code", None))
+                    # If high demand 503, pause briefly before retry
+                    if status_code == 503 and attempt == 0:
+                        time.sleep(1.0)
+                        continue
+                    # If 503 and we have a fallback model, break to try fallback
+                    if status_code == 503:
+                        break
+                    # If 401 or 403, invalid key
+                    if status_code in (401, 403):
+                        raise RuntimeError(
+                            f"Gemini API authentication failed ({status_code}): Invalid GEMINI_API_KEY. "
+                            "Please check your API key in Google AI Studio and update your .env file."
+                        ) from e
+                    # If 404, unsupported/not found model
+                    if status_code == 404:
+                        if len(models_to_try) > 1 and current_model != models_to_try[-1]:
+                            logger.warning(f"Model '{current_model}' returned 404, trying fallback '{models_to_try[-1]}'")
+                            break
+                        raise RuntimeError(
+                            f"Gemini model '{current_model}' not found (404). "
+                            "Please check GEMINI_MODEL in your .env file (recommended: gemini-3.6-flash)."
+                        ) from e
+                    # If 429, quota exhausted
+                    if status_code == 429:
+                        raise RuntimeError(
+                            "Gemini API quota exhausted (429): Rate limit exceeded. "
+                            "Please verify your API quota in Google AI Studio or retry in a few moments."
+                        ) from e
+                    raise RuntimeError(f"Gemini API error ({status_code}): {str(e)}") from e
+                except Exception as e:
+                    last_error = e
+                    err_str = str(e)
+                    if "RemoteProtocolError" in err_str or "Server disconnected" in err_str:
+                        if attempt == 0:
+                            time.sleep(0.5)
+                            continue
+                        raise RuntimeError(
+                            f"Gemini API network connection dropped: {err_str}. Please retry your query."
+                        ) from e
+                    raise RuntimeError(f"Gemini API generation error: {err_str}") from e
+
+        # If all attempts and fallbacks were exhausted
+        logger.error(f"Gemini API generation failed: {last_error}")
+        raise RuntimeError(
+            f"Gemini API service temporarily unavailable: {str(last_error)}. "
+            "The model experienced high demand spikes. Please try again."
+        ) from last_error
 
     @property
     def provider_name(self) -> str:
@@ -232,9 +301,9 @@ def get_llm_provider(provider_name: Optional[str] = None) -> BaseLLMProvider:
     provider = (provider_name or settings.LLM_PROVIDER).lower().strip()
 
     if provider == "gemini":
-        # Fall back to mock if Gemini key is completely absent and user hasn't configured it yet
-        if not settings.GEMINI_API_KEY:
-            logger.warning("GEMINI_API_KEY not set. Using MockLLMProvider for offline mode.")
+        # Fall back to mock if Gemini key is completely absent or placeholder and user hasn't configured it yet
+        if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY.startswith("your_"):
+            logger.warning("GEMINI_API_KEY not set or placeholder. Using MockLLMProvider for offline mode.")
             return MockLLMProvider()
         return GeminiLLMProvider()
     elif provider == "mock":

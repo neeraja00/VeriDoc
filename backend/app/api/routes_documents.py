@@ -1,9 +1,12 @@
 """API routes for document upload, listing, previewing chunks, and deletion."""
 import os
 import shutil
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import FileResponse
 from backend.app.config import settings

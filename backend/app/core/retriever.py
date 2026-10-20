@@ -98,13 +98,13 @@ class ContextRetriever:
                 except Exception:
                     candidate_results = raw_results
             else:
-                # Always prioritize the actual semantic vector search results
-                candidate_results = valid_results if valid_results else raw_results
+                # Strictly respect threshold filtering for factual queries
+                candidate_results = valid_results
 
             return self._deduplicate_and_build_citations(candidate_results, top_k=k, is_overview=is_overview)
         else:
-            # Multi-document search: prioritize vector similarity matches
-            candidate_pool = valid_results if valid_results else raw_results[:candidate_k]
+            # Multi-document search: only fall back to raw results for overview queries
+            candidate_pool = valid_results if valid_results else (raw_results[:candidate_k] if is_overview else [])
             return self._deduplicate_and_build_citations(candidate_pool, top_k=k, is_overview=is_overview)
 
     def _deduplicate_and_build_citations(

@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Environment & Secrets
+.env
+*.env
+*.pem
+*.key
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+tests/pipeline_chroma_db/
+tests/test_chroma_db/
+
+# Data & Persistence
+data/chroma_db/
+data/uploads/*
+!data/uploads/.gitkeep

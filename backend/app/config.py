@@ -11,12 +11,13 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "gemini"  # "gemini", "openai", "anthropic", "mock"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.6-flash"
+    VERIFY_SSL: bool = True  # Enable SSL verification by default for secure API communication
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 
     # Embedding Settings
-    EMBEDDING_PROVIDER: str = "gemini"  # "gemini", "sentence-transformers", "mock"
-    EMBEDDING_MODEL: str = "text-embedding-004"
+    EMBEDDING_PROVIDER: str = "sentence-transformers"  # "sentence-transformers", "gemini", "mock"
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
 
     # Vector Store & Storage
     CHROMA_PERSIST_DIR: str = str(BASE_DIR / "data" / "chroma_db")
