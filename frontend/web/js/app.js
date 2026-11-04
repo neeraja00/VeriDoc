@@ -1,8 +1,9 @@
+
 /**
  * VeriDoc AI - Frontend Application Logic
  * Monochrome Edition with Advanced Document Scoping, Summarization & Analytics
  */
-
+const API_BASE_URL = "https://veridoc-ai-ld0g.onrender.com";
 document.addEventListener("DOMContentLoaded", () => {
   // DOM Elements
   const statusBadge = document.getElementById("system-status-badge");
@@ -375,7 +376,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function fetchSystemHealth() {
     try {
-      const res = await fetch("/api/system/health");
+      const res = await fetch(`${API_BASE_URL}/api/system/health`);
       if (!res.ok) throw new Error("Health check failed");
       const data = await res.json();
 
@@ -401,7 +402,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function fetchDocumentList() {
     try {
-      const res = await fetch("/api/documents");
+      const res = await fetch(`${API_BASE_URL}/api/documents`);
       if (!res.ok) throw new Error("Failed to load documents");
       const data = await res.json();
 
@@ -512,7 +513,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function deleteDocument(filename) {
     try {
-      const res = await fetch(`/api/documents/${encodeURIComponent(filename)}`, {
+      const res = await fetch(`${API_BASE_URL}/api/documents/${encodeURIComponent(filename)}`, {
         method: "DELETE"
       });
       if (!res.ok) {
@@ -530,7 +531,7 @@ document.addEventListener("DOMContentLoaded", () => {
   btnClearAll.addEventListener("click", async () => {
     if (confirm("Are you sure you want to clear ALL documents and reset the vector store?")) {
       try {
-        const res = await fetch("/api/documents/clear", { method: "POST" });
+        const res = await fetch(`${API_BASE_URL}/api/documents/clear`, { method: "POST" });
         if (!res.ok) throw new Error("Failed to clear index");
         setActiveDocumentFilter(null);
         await fetchDocumentList();
@@ -590,7 +591,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       uploadProgressBar.style.width = "60%";
-      const res = await fetch("/api/documents/upload", {
+      const res = await fetch(`${API_BASE_URL}/api/documents/upload`, {
         method: "POST",
         body: formData,
       });
@@ -634,7 +635,7 @@ document.addEventListener("DOMContentLoaded", () => {
     chunkModal.style.display = "flex";
 
     try {
-      const res = await fetch(`/api/documents/${encodeURIComponent(filename)}/chunks`);
+      const res = await fetch(`${API_BASE_URL}/api/documents/${encodeURIComponent(filename)}/chunks`);
       if (!res.ok) throw new Error("Could not fetch chunks");
       const chunks = await res.json();
 
@@ -703,7 +704,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (proofScoreTag) proofScoreTag.textContent = `Match: ${scorePct}%`;
     if (proofExcerptText) proofExcerptText.textContent = citation.content || citation.excerpt;
 
-    const fileUrl = `/api/documents/${encodeURIComponent(filename)}/file#page=${page}`;
+    const fileUrl = `${API_BASE_URL}/api/documents/${encodeURIComponent(filename)}/file#page=${page}`;
     if (proofIframe) proofIframe.src = fileUrl;
     if (btnProofNewTab) btnProofNewTab.href = fileUrl;
 
@@ -762,7 +763,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document_filter: activeDocumentFilter ? [activeDocumentFilter] : null
       };
 
-      const res = await fetch("/api/rag/query", {
+      const res = await fetch(`${API_BASE_URL}/api/rag/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
